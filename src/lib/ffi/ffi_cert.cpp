@@ -1,5 +1,6 @@
 /*
 * (C) 2015,2017,2018 Jack Lloyd
+* (C) 2025 LANCOM Systems GmbH Tim Wiechers
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
@@ -488,6 +489,24 @@ int botan_x509_cert_verify_with_crl(int* result_code,
 #else
    BOTAN_UNUSED(result_code, cert, intermediates, intermediates_len, trusted);
    BOTAN_UNUSED(trusted_len, trusted_path, hostname_cstr, reference_time, crls, crls_len);
+   return BOTAN_FFI_ERROR_NOT_IMPLEMENTED;
+#endif
+}
+
+int botan_x509_cert_view_pem(botan_x509_cert_t cert, botan_view_ctx ctx, botan_view_str_fn view) {
+#if defined(BOTAN_HAS_X509_CERTIFICATES)
+   return BOTAN_FFI_VISIT(cert, [=](const auto& c) { return invoke_view_callback(view, ctx, c.PEM_encode()); });
+#else
+   BOTAN_UNUSED(cert, ctx, view);
+   return BOTAN_FFI_ERROR_NOT_IMPLEMENTED;
+#endif
+}
+
+int botan_x509_cert_is_ca(botan_x509_cert_t cert, int* out_is_ca) {
+#if defined(BOTAN_HAS_X509_CERTIFICATES)
+   return BOTAN_FFI_VISIT(cert, [=](const auto& c) { *out_is_ca = c.is_CA_cert(); });
+#else
+   BOTAN_UNUSED(cert, out_is_ca);
    return BOTAN_FFI_ERROR_NOT_IMPLEMENTED;
 #endif
 }

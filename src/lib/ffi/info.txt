@@ -8,6 +8,8 @@ brief -> "C API for Botan's functionality"
 </module_info>
 
 <header:internal>
+ffi_cert_ext.h
+ffi_dn.h
 ffi_mp.h
 ffi_pkey.h
 ffi_rng.h

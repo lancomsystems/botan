@@ -2,6 +2,7 @@
 * FFI (C89 API)
 * (C) 2015,2017 Jack Lloyd
 * (C) 2021 René Fischer
+* (C) 2025 LANCOM Systems GmbH Tim Wiechers
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
@@ -1990,6 +1991,344 @@ int botan_x509_cert_verify(int* validation_result,
 * or else NULL if unknown.
 */
 BOTAN_FFI_EXPORT(2, 8) const char* botan_x509_cert_validation_status(int code);
+
+/**
+* View the PEM encoding of the given certificate.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_cert_view_pem(botan_x509_cert_t cert, botan_view_ctx ctx, botan_view_str_fn view);
+
+/**
+* Check whether this certificate is a CA certificate.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_cert_is_ca(botan_x509_cert_t cert, int* out_is_ca);
+
+/*
+* X.509 Distinguished Name
+*********************************/
+
+/**
+* Distinguished Name
+*/
+typedef struct botan_x509_dn_struct* botan_x509_dn_t;
+
+/**
+* Initialize a Distinguished Name without any attributes
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_dn_init(botan_x509_dn_t* dn);
+
+/**
+* Destroy the Distinguished Name
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_dn_destroy(botan_x509_dn_t dn);
+
+/**
+* Add a name attribute
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_dn_add_attribute(botan_x509_dn_t dn, const char* oid, const char* value);
+
+/**
+* Retrieve attributes of the Distinguished name.
+* @param dn the Distinguished name object
+* @param oid the attribute OID
+* @param out_len specifies the maximum capacity of returned values, and is set to the number of returned values.
+*                If there are more values added to this name, then BOTAN_FFI_ERROR_INSUFFICIENT_BUFFER_SPACE will be returned.
+* @param out_values returned values of the given attribute
+* @param value_buf_size specifies the maximum capacity for each value in out_values.
+*                       If there is any attribute value that does not fit into this size,
+*                       BOTAN_FFI_ERROR_INSUFFICIENT_BUFFER_SPACE will be returned.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_dn_get_attributes(
+   botan_x509_dn_t dn, const char* oid, size_t* out_len, char** out_values, size_t value_buf_size);
+
+/*
+* X.509 certificate extensions
+*********************************/
+
+/*
+* Certificate extension list
+*/
+typedef struct botan_x509_exts_struct* botan_x509_exts_t;
+
+/*
+* Certificate extension supertype
+*/
+typedef struct botan_x509_cert_ext_struct* botan_x509_cert_ext_t;
+
+/*
+* Basic Constraints extension
+*/
+typedef struct botan_x509_basic_constraints_struct* botan_x509_basic_constraints_t;
+
+/*
+* Key Usage extension
+*/
+typedef struct botan_x509_key_usage_struct* botan_x509_key_usage_t;
+
+/*
+* Extended Key Usage extension
+*/
+typedef struct botan_x509_extended_key_usage_struct* botan_x509_extended_key_usage_t;
+
+/*
+* Subject Alternative Name extension
+*/
+typedef struct botan_x509_subject_alt_name_struct* botan_x509_subject_alt_name_t;
+
+/*
+* Subject Alternative Name extension
+*/
+typedef struct botan_x509_alt_name_struct* botan_x509_alt_name_t;
+
+/**
+* Initialize a certificate extension list
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_exts_init(botan_x509_exts_t* exts);
+
+/**
+* Destroy the certificate extension list
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_exts_destroy(botan_x509_exts_t exts);
+
+/**
+* Add a certificate extension to the list, and replace any existing extension of the same type
+* @param exts the extension list object
+* @param ext the extension object
+* @param is_critical 1 if designated as critical, 0 otherwise
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_exts_add_or_replace(botan_x509_exts_t exts, botan_x509_cert_ext_t ext, int is_critical);
+
+/**
+* Check whether a given certificate extension is designated as critical in the given extension list
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_exts_is_critical(botan_x509_exts_t exts, botan_x509_cert_ext_t ext, int* out_is_critical);
+
+/**
+* Initialize a Basic Constraints certificate extension
+* @param ext the output Basic Constraints object
+* @param is_ca 1 if the subject of the certificate is a CA, 0 otherwise
+* @param path_limit the maximum number of non-self-issued Intermediate Certificate that may follow this certificate in a valid certification path
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_basic_constraints_init(botan_x509_basic_constraints_t* ext, int is_ca, size_t path_limit);
+
+/**
+* Destroy the Basic Constraints certificate extension
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_basic_constraints_destroy(botan_x509_basic_constraints_t ext);
+
+/**
+* Check whether the subject of the certificate is marked as a CA in the given Basic Constraints extension.
+* @param ext the Basic Constraints object
+* @param out_is_ca will be set to 1 if the subject of the certificate is a CA, or 0 otherwise
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_basic_constraints_is_ca(botan_x509_basic_constraints_t ext, int* out_is_ca);
+
+/**
+* Retrieve the set path limit in a Basic Constraints extension.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_basic_constraints_path_limit(botan_x509_basic_constraints_t ext, size_t* out_path_limit);
+
+/**
+* Look up a Basic Constraints extension in the list of certificate extensions.
+* @param out_ext if a Basic Constraints extension is in the extension list, this pointer will be updated
+* @param exts the extension list that may or may not contain a Basic Constraints extension
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_basic_constraints_get(botan_x509_basic_constraints_t* out_ext, botan_x509_exts_t exts);
+
+/**
+* Initialize a Key Usage extension.
+* @param out_ext the output Key Usage object
+* @param constraints see Botan::Key_Constraints::Bits
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_key_usage_init(botan_x509_key_usage_t* out_ext, uint32_t constraints);
+
+/**
+* Destroy the Key Usage certificate extension
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_key_usage_destroy(botan_x509_key_usage_t ext);
+
+/**
+* Retrieve the set constraints in a Key Usage extension.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_key_usage_constraints(botan_x509_key_usage_t ext, uint32_t* out_constraints);
+
+/**
+* Look up a Key Usage extension in the list of certificate extensions.
+* @param out_ext if a Key Usage extension is in the extension list, this pointer will be updated
+* @param exts the extension list that may or may not contain a Key Usage extension
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_key_usage_get(botan_x509_key_usage_t* out_ext, botan_x509_exts_t exts);
+
+/**
+* Initialize an Extended Key Usage extension.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_extended_key_usage_init(botan_x509_extended_key_usage_t* out_ext, char* oids[], size_t oids_len);
+
+/**
+* Destroy the Extended Key Usage certificate extension
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_extended_key_usage_destroy(botan_x509_extended_key_usage_t ext);
+
+/**
+* Check whether the Extended Key Usage extension was initialized contains the given OID.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_extended_key_usage_contains(botan_x509_extended_key_usage_t ext, int* out_contains_oid, char* oid);
+
+/**
+* Look up an Extended Key Usage extension in the list of certificate extensions.
+* @param out_ext if an Extended Key Usage extension is in the extension list, this pointer will be updated
+* @param exts the extension list that may or may not contain an Extended Key Usage extension
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_extended_key_usage_get(botan_x509_extended_key_usage_t* out_ext, botan_x509_exts_t exts);
+
+/**
+* Initialize an Alternative name.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_alt_name_init(botan_x509_alt_name_t* out_alt_name);
+
+/**
+* Destroy the Alternative name
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_alt_name_destroy(botan_x509_alt_name_t alt_name);
+
+/**
+* Add an attribute to the Alternative name.
+* This is intended for everything but directory names: DNS, email, URI, IPs.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_alt_name_add_attribute(botan_x509_alt_name_t alt_name, char* type, char* value);
+
+/**
+* Add a directory name attribute of the Alternative name.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_alt_name_add_dir(botan_x509_alt_name_t alt_name, botan_x509_dn_t dn);
+
+/**
+* Retrieve attributes of the Alternative name.
+* This is intended for everything but directory names: DNS, email, URI, IPs.
+* @param alt_name the Alternative name object
+* @param type "DNS", "RFC822", "URI", or "IP"
+* @param out_len specifies the maximum capacity of returned values, and is set to the number of returned values.
+*                If there are more values added to this name, then BOTAN_FFI_ERROR_INSUFFICIENT_BUFFER_SPACE will be returned.
+* @param out_values returned values of the given attribute type
+* @param value_buf_size specifies the maximum capacity for each value in out_values.
+*                       If there is any attribute value that does not fit into this size,
+*                       BOTAN_FFI_ERROR_INSUFFICIENT_BUFFER_SPACE will be returned.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_alt_name_get_attribute(
+   botan_x509_alt_name_t alt_name, char* type, size_t* out_len, char** out_values, size_t value_buf_size);
+
+/**
+* Retrieve the directory name attribute values of the Alternative name.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_alt_name_get_dir(botan_x509_alt_name_t alt_name, size_t* out_len, botan_x509_dn_t* out_values);
+
+/**
+* Initialize a Subject Alternative Name extension.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_subject_alt_name_init(botan_x509_subject_alt_name_t* out_ext, botan_x509_alt_name_t alt_name);
+
+/**
+* Destroy the Subject Alternative Name extension
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_subject_alt_name_destroy(botan_x509_subject_alt_name_t ext);
+
+/**
+* Retrieve the Alternative name of the Subject Alternative Name extension.
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_subject_alt_name_name(botan_x509_subject_alt_name_t ext, botan_x509_alt_name_t* out_alt_name);
+
+/**
+* Look up a Subject Alternative Name extension in the list of certificate extensions.
+* @param out_ext if a Subject Alternative Name extension is in the extension list, this pointer will be updated
+* @param exts the extension list that may or may not contain a Subject Alternative Name extension
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_ext_subject_alt_name_get(botan_x509_subject_alt_name_t* out_ext, botan_x509_exts_t exts);
+
+/*
+* Certificate Signing Requests
+********************************/
+
+/**
+* PKCS #10 Certificate Signing Request
+*/
+typedef struct botan_x509_csr_struct* botan_x509_csr_t;
+
+/**
+* Create a new PKCS10 certificate signing request
+* @param out_csr the output certificate signing request
+* @param key the key that will be included in the certificate request
+* @param subject_dn the DN to be placed in the request
+* @param exts extensions to include in the request
+* @param hash_name the hash function to use to create the signature
+* @param rng a random number generator
+* @param padding_scheme specifies the padding scheme. Leave empty to use an algorithm-specific default
+* @param challenge a challenge string to be included in the PKCS10 request, sometimes used for revocation purposes. Leave empty to omit
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_csr_init(botan_x509_csr_t* out_csr,
+                        botan_privkey_t key,
+                        botan_x509_dn_t subject_dn,
+                        botan_x509_exts_t exts,
+                        const char* hash_name,
+                        botan_rng_t rng,
+                        const char* padding_scheme,
+                        const char* challenge);
+
+/**
+* Destroy the certificate signing request
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_csr_destroy(botan_x509_csr_t csr);
+
+/**
+* View the PEM encoding of the certificate signing request
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_csr_view_pem(botan_x509_csr_t csr, botan_view_ctx ctx, botan_view_str_fn view);
+
+/**
+* View the DER encoding of the certificate signing request
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_csr_view_der(botan_x509_csr_t csr, botan_view_ctx ctx, botan_view_bin_fn view);
+
+/**
+* Initialize a certificate signing request from a given PEM encoding
+*/
+BOTAN_FFI_EXPORT(3, 8)
+int botan_x509_csr_load(botan_x509_csr_t* out_csr, const uint8_t csr_bits[], size_t csr_bits_len);
 
 /*
 * X.509 CRL

@@ -7,6 +7,7 @@ https://botan.randombit.net
 (C) 2015,2017,2018,2019,2023 Jack Lloyd
 (C) 2015 Uri  Blumenthal (extensions and patches)
 (C) 2024 Amos Treiber, René Meusel - Rohde & Schwarz Cybersecurity
+(C) 2025 LANCOM Systems GmbH Tim Wiechers
 
 Botan is released under the Simplified BSD License (see license.txt)
 
@@ -17,9 +18,12 @@ It uses botan's ffi module, which exposes a C API.
 """
 
 from ctypes import CDLL, CFUNCTYPE, POINTER, byref, create_string_buffer, \
-    c_void_p, c_size_t, c_uint8, c_uint32, c_uint64, c_int, c_uint, c_char, c_char_p, addressof
-from typing import Callable
+    c_void_p, c_size_t, c_uint8, c_uint32, c_uint64, c_int, c_uint, c_char, c_char_p, addressof, \
+    cast
+from typing import Callable, List, Optional, Type, Union
 
+from abc import ABC, abstractmethod
+from enum import Enum, IntFlag
 from sys import platform
 from time import strptime, mktime, time as system_time
 from binascii import hexlify
@@ -464,6 +468,55 @@ def _set_prototypes(dll):
 
     dll.botan_x509_cert_validation_status.argtypes = [c_int]
     dll.botan_x509_cert_validation_status.restype = c_char_p
+
+    ffi_api(dll.botan_x509_cert_view_pem, [c_void_p, c_void_p, VIEW_STR_CALLBACK])
+    ffi_api(dll.botan_x509_cert_is_ca, [c_void_p, POINTER(c_int)])
+
+    # X509 DN
+    ffi_api(dll.botan_x509_dn_init, [c_void_p])
+    ffi_api(dll.botan_x509_dn_destroy, [c_void_p])
+    ffi_api(dll.botan_x509_dn_add_attribute, [c_void_p, c_char_p, c_char_p])
+    ffi_api(dll.botan_x509_dn_get_attributes, [c_void_p, c_char_p, POINTER(c_size_t), POINTER(POINTER(c_char)), c_size_t])
+
+    # X509 extensions
+    ffi_api(dll.botan_x509_exts_init, [c_void_p])
+    ffi_api(dll.botan_x509_exts_destroy, [c_void_p])
+    ffi_api(dll.botan_x509_exts_add_or_replace, [c_void_p, c_void_p, c_int])
+    ffi_api(dll.botan_x509_exts_is_critical, [c_void_p, c_void_p, POINTER(c_int)])
+
+    ffi_api(dll.botan_x509_ext_basic_constraints_init, [c_void_p, c_int, c_size_t])
+    ffi_api(dll.botan_x509_ext_basic_constraints_destroy, [c_void_p])
+    ffi_api(dll.botan_x509_ext_basic_constraints_is_ca, [c_void_p, POINTER(c_int)])
+    ffi_api(dll.botan_x509_ext_basic_constraints_path_limit, [c_void_p, POINTER(c_size_t)])
+    ffi_api(dll.botan_x509_ext_basic_constraints_get, [POINTER(c_void_p), c_void_p])
+
+    ffi_api(dll.botan_x509_ext_key_usage_init, [c_void_p, c_uint32])
+    ffi_api(dll.botan_x509_ext_key_usage_destroy, [c_void_p])
+    ffi_api(dll.botan_x509_ext_key_usage_constraints, [c_void_p, POINTER(c_uint32)])
+    ffi_api(dll.botan_x509_ext_key_usage_get, [POINTER(c_void_p), c_void_p])
+
+    ffi_api(dll.botan_x509_ext_extended_key_usage_init, [c_void_p, POINTER(POINTER(c_char)), c_size_t])
+    ffi_api(dll.botan_x509_ext_extended_key_usage_destroy, [c_void_p])
+    ffi_api(dll.botan_x509_ext_extended_key_usage_contains, [c_void_p, POINTER(c_int), c_char_p])
+
+    ffi_api(dll.botan_x509_alt_name_init, [c_void_p])
+    ffi_api(dll.botan_x509_alt_name_destroy, [c_void_p])
+    ffi_api(dll.botan_x509_alt_name_add_attribute, [c_void_p, c_char_p, c_char_p])
+    ffi_api(dll.botan_x509_alt_name_add_dir, [c_void_p, c_void_p])
+    ffi_api(dll.botan_x509_alt_name_get_attribute, [c_void_p, c_char_p, POINTER(c_size_t), POINTER(POINTER(c_char)), c_size_t])
+    ffi_api(dll.botan_x509_alt_name_get_dir, [c_void_p, POINTER(c_size_t), POINTER(c_void_p)])
+
+    ffi_api(dll.botan_x509_ext_subject_alt_name_init, [c_void_p, c_void_p])
+    ffi_api(dll.botan_x509_ext_subject_alt_name_destroy, [c_void_p])
+    ffi_api(dll.botan_x509_ext_subject_alt_name_name, [c_void_p, POINTER(c_void_p)])
+    ffi_api(dll.botan_x509_ext_subject_alt_name_get, [POINTER(c_void_p), c_void_p])
+
+    # X509 CSR
+    ffi_api(dll.botan_x509_csr_init, [c_void_p, c_void_p, c_void_p, c_void_p, c_char_p, c_void_p, c_char_p, c_char_p])
+    ffi_api(dll.botan_x509_csr_destroy, [c_void_p])
+    ffi_api(dll.botan_x509_csr_view_pem, [c_void_p, c_void_p, VIEW_STR_CALLBACK])
+    ffi_api(dll.botan_x509_csr_view_der, [c_void_p, c_void_p, VIEW_BIN_CALLBACK])
+    ffi_api(dll.botan_x509_csr_load, [c_void_p, c_char_p, c_size_t])
 
     # X509 CRL
     ffi_api(dll.botan_x509_crl_load, [c_void_p, c_char_p, c_size_t])
@@ -1895,6 +1948,442 @@ class X509Cert: # pylint: disable=invalid-name
         rc = _DLL.botan_x509_is_revoked(crl.handle_(), self.__obj)
         return rc == 0
 
+    def to_pem(self) -> str:
+        return _call_fn_viewing_str(lambda vc, vfn: _DLL.botan_x509_cert_view_pem(self.__obj, vc, vfn))
+
+    @property
+    def is_ca(self) -> bool:
+        res = c_int(0)
+        _DLL.botan_x509_cert_is_ca(self.__obj, byref(res))
+        return bool(res)
+
+class X509DN:
+    def __init__(self, obj: c_void_p = c_void_p(0)) -> None:
+        if obj:
+            self.__obj = obj
+        else:
+            self.__obj = c_void_p(0)
+            _DLL.botan_x509_dn_init(byref(self.__obj))
+
+    def __del__(self):
+        _DLL.botan_x509_dn_destroy(self.__obj)
+
+    def handle_(self) -> c_void_p:
+        return self.__obj
+
+    def add_attribute(self, oid: str, value: str) -> None:
+        _DLL.botan_x509_dn_add_attribute( self.__obj, _ctype_str(oid), _ctype_str(value))
+
+    def get_attributes(self, oid: str) -> List[str]:
+        return self._get_attributes_with_buffer_sizes(oid)
+
+    def _get_attributes_with_buffer_sizes(
+        self,
+        oid: str,
+        max_attribute_values: int = 16,
+        max_attribute_value_len: int = 128,
+    ) -> List[str]:
+        len_values = c_size_t(max_attribute_values)
+        buf_values = (POINTER(c_char) * max_attribute_values)()
+        for i in range(max_attribute_values):
+            buf_values[i] = (c_char * max_attribute_value_len)()
+
+        rc = _DLL.botan_x509_dn_get_attributes(
+            self.__obj,
+            _ctype_str(oid),
+            byref(len_values),
+            buf_values,
+            max_attribute_value_len,
+        )
+
+        if rc == -10:
+            return self._get_attributes_with_buffer_sizes(
+                oid=oid,
+                max_attribute_values=max_attribute_values * 2,
+                max_attribute_value_len=max_attribute_value_len * 2,
+            )
+
+        res = []
+        for i in range(len_values.value):
+            value: bytes = cast(buf_values[i], c_char_p).value
+            res.append(_ctype_to_str(value))
+
+        return res
+
+class X509CertExtensions:
+    def __init__(self) -> None:
+        self.__obj = c_void_p(0)
+        _DLL.botan_x509_exts_init(byref(self.__obj))
+
+    def __del__(self):
+        _DLL.botan_x509_exts_destroy(self.__obj)
+
+    def handle_(self) -> c_void_p:
+        return self.__obj
+
+    def add(self, extension: "X509CertExtension", critical: bool) -> None:
+        _DLL.botan_x509_exts_add_or_replace(self.__obj, extension.handle_(), c_int(critical))
+
+    def get(self, ext_typ: Type["X509CertExtension"]) -> Optional["X509CertExtension"]:
+        return ext_typ._get_in(self)
+
+    def get_all(self) -> List["X509CertExtension"]:
+        added_extensions = []
+
+        for ext_type in X509CertExtension.__subclasses__():
+            ext = self.get(ext_type)
+            if ext is not None:
+                added_extensions.append(ext)
+
+        return added_extensions
+
+    def is_set(self, ext_typ: Type["X509CertExtension"]) -> bool:
+        return ext_typ._get_in(self) is not None
+
+    def is_critical(self, ext: "X509CertExtension") -> Optional[bool]:
+        if not self.is_set(ext.__class__):
+            return None
+
+        res = c_int(0)
+        _DLL.botan_x509_exts_is_critical(self.__obj, ext.handle_(), byref(res))
+        return bool(res)
+
+class X509CertExtension(ABC):
+    @abstractmethod
+    def handle_(self) -> c_void_p:
+        raise NotImplementedError
+
+    @staticmethod
+    @abstractmethod
+    def _get_in(extensions: X509CertExtensions) -> Optional["X509CertExtension"]:
+        raise NotImplementedError
+
+class X509BasicConstraints(X509CertExtension):
+    def __init__(self, obj: c_void_p) -> None:
+        self.__obj = obj
+
+    def __del__(self):
+        _DLL.botan_x509_ext_basic_constraints_destroy(self.__obj)
+
+    def handle_(self) -> c_void_p:
+        return self.__obj
+
+    @staticmethod
+    def create(is_ca: bool = False, path_limit: Optional[int] = None) -> "X509BasicConstraints":
+        if path_limit is not None and path_limit < 0:
+            raise ValueError("path_limit must be greater than or equal to zero")
+        if not is_ca and path_limit is not None:
+            raise ValueError("cannot set path_limit for non-CA certificate")
+        obj = c_void_p(0)
+        _DLL.botan_x509_ext_basic_constraints_init(
+            byref(obj), c_int(is_ca), c_size_t(path_limit or 0)
+        )
+        return X509BasicConstraints(obj)
+
+    @staticmethod
+    def _get_in(extensions: X509CertExtensions) -> Optional["X509BasicConstraints"]:
+        obj = c_void_p(0)
+        _DLL.botan_x509_ext_basic_constraints_get(byref(obj), extensions.handle_())
+        return X509BasicConstraints(obj) if obj else None
+
+    @property
+    def is_ca(self) -> bool:
+        res = c_int(0)
+        _DLL.botan_x509_ext_basic_constraints_is_ca(self.__obj, byref(res))
+        return bool(res)
+
+    @property
+    def path_limit(self) -> Optional[int]:
+        if not self.is_ca:
+            return None
+        res = c_size_t(0)
+        _DLL.botan_x509_ext_basic_constraints_path_limit(self.__obj, byref(res))
+        return int(res.value)
+
+class X509KeyUsageFlags(IntFlag):
+    NONE = 0
+    DIGITAL_SIGNATURE = 1 << 15
+    CONTENT_COMMITMENT = 1 << 14  # or "NON_REPUDIATION"
+    KEY_ENCIPHERMENT = 1 << 13
+    DATA_ENCIPHERMENT = 1 << 12
+    KEY_AGREEMENT = 1 << 11
+    KEY_CERT_SIGN = 1 << 10
+    CRL_SIGN = 1 << 9
+    ENCIPHER_ONLY = 1 << 8
+    DECIPHER_ONLY = 1 << 7
+
+class X509KeyUsage(X509CertExtension):
+    def __init__(self, obj: c_void_p) -> None:
+        self.__obj = obj
+
+    def __del__(self):
+        _DLL.botan_x509_ext_key_usage_destroy(self.__obj)
+
+    def handle_(self) -> c_void_p:
+        return self.__obj
+
+    @staticmethod
+    def create(flags: X509KeyUsageFlags) -> "X509KeyUsage":
+        obj = c_void_p(0)
+        _DLL.botan_x509_ext_key_usage_init(byref(obj), c_uint32(flags.value))
+        return X509KeyUsage(obj)
+
+    @staticmethod
+    def _get_in(extensions: X509CertExtensions) -> Optional["X509KeyUsage"]:
+        obj = c_void_p(0)
+        _DLL.botan_x509_ext_key_usage_get(byref(obj), extensions.handle_())
+        return X509KeyUsage(obj) if obj else None
+
+    @property
+    def flags(self) -> X509KeyUsageFlags:
+        res = c_uint32(0)
+        _DLL.botan_x509_ext_key_usage_constraints(self.__obj, byref(res))
+        return X509KeyUsageFlags(int(res.value))
+
+class X509ExtendedKeyUsageOid(Enum):
+    SERVER_AUTH = "1.3.6.1.5.5.7.3.1"
+    CLIENT_AUTH = "1.3.6.1.5.5.7.3.2"
+    CODE_SIGNING = "1.3.6.1.5.5.7.3.3"
+    EMAIL_PROTECTION = "1.3.6.1.5.5.7.3.4"
+    IPSEC_END_SYSTEM = "1.3.6.1.5.5.7.3.5"
+    IPSEC_TUNNEL = "1.3.6.1.5.5.7.3.6"
+    IPSEC_USER = "1.3.6.1.5.5.7.3.7"
+    TIME_STAMPING = "1.3.6.1.5.5.7.3.8"
+    OCSP_SIGNING = "1.3.6.1.5.5.7.3.9"
+    IPSEC_IKE = "1.3.6.1.5.5.7.3.17"
+    ANY_EXTENDED_KEY_USAGE = "2.5.29.37.0"
+
+class X509ExtendedKeyUsage(X509CertExtension):
+    def __init__(self, obj: c_void_p) -> None:
+        self.__obj = obj
+
+    def __del__(self):
+        _DLL.botan_x509_ext_extended_key_usage_destroy(self.__obj)
+
+    def handle_(self) -> c_void_p:
+        return self.__obj
+
+    @staticmethod
+    def create(oids: List[X509ExtendedKeyUsageOid]) -> "X509ExtendedKeyUsage":
+        len_oids = c_size_t(len(oids))
+        arr_oids = (POINTER(c_char) * len(oids))()
+        for i, oid in enumerate(oids):
+            arr_oids[i] = create_string_buffer(_ctype_str(oid.value))
+
+        obj = c_void_p(0)
+        _DLL.botan_x509_ext_extended_key_usage_init(byref(obj), arr_oids, len_oids)
+        return X509ExtendedKeyUsage(obj)
+
+    @staticmethod
+    def _get_in(extensions: X509CertExtensions) -> Optional["X509ExtendedKeyUsage"]:
+        obj = c_void_p(0)
+        _DLL.botan_x509_ext_extended_key_usage_get(byref(obj), extensions.handle_())
+        return X509ExtendedKeyUsage(obj) if obj else None
+
+    @property
+    def oids(self) -> List[X509ExtendedKeyUsageOid]:
+        return [oid for oid in X509ExtendedKeyUsageOid if self.contains(oid)]
+
+    def contains(self, oid: X509ExtendedKeyUsageOid) -> bool:
+        res = c_int(0)
+        _DLL.botan_x509_ext_extended_key_usage_contains(
+            self.__obj, byref(res), _ctype_str(oid.value)
+        )
+        return bool(res)
+
+class X509AlternativeName:
+    def __init__(self, obj: c_void_p) -> None:
+        self.__obj = obj
+
+    def __del__(self):
+        _DLL.botan_x509_alt_name_destroy(self.__obj)
+
+    def handle_(self) -> c_void_p:
+        return self.__obj
+
+    @staticmethod
+    def create() -> "X509AlternativeName":
+        obj = c_void_p(0)
+        _DLL.botan_x509_alt_name_init(byref(obj))
+        return X509AlternativeName(obj)
+
+    def add_dir(self, dn: X509DN) -> None:
+        _DLL.botan_x509_alt_name_add_dir(self.__obj, dn.handle_())
+
+    @property
+    def dirs(self) -> List[X509DN]:
+        return self._dirs_with_buffer_size()
+
+    def _dirs_with_buffer_size(self, max_values: int = 16) -> List[X509DN]:
+        len_values = c_size_t(max_values)
+        buf_values = (c_void_p * max_values)()
+
+        rc = _DLL.botan_x509_alt_name_get_dir(
+            self.__obj,
+            byref(len_values),
+            buf_values,
+        )
+
+        if rc == -10:
+            return self._dirs_with_buffer_size(max_values=max_values * 2)
+
+        res = []
+        for i in range(len_values.value):
+            res.append(X509DN(obj=buf_values[i]))
+
+        return res
+
+    def add_dns(self, dns: str) -> None:
+        self._add_attribute("DNS", dns)
+
+    @property
+    def dns(self) -> List[str]:
+        return self._get_attributes("DNS")
+
+    def add_email(self, email: str) -> None:
+        self._add_attribute("RFC822", email)
+
+    @property
+    def emails(self) -> List[str]:
+        return self._get_attributes("RFC822")
+
+    def add_ipv4(self, ip: str) -> None:
+        self._add_attribute("IP", ip)
+
+    @property
+    def ips(self) -> List[str]:
+        return self._get_attributes("IP")
+
+    def add_uri(self, uri: str) -> None:
+        self._add_attribute("URI", uri)
+
+    @property
+    def uris(self) -> List[str]:
+        return self._get_attributes("URI")
+
+    def _add_attribute(self, typ: str, value: str) -> None:
+        assert typ in {
+            "DNS",  # fqdn
+            "RFC822",  # email
+            "URI",
+            "DN",
+            "IP",
+        }
+        _DLL.botan_x509_alt_name_add_attribute(self.__obj, _ctype_str(typ), _ctype_str(value))
+
+    def _get_attributes(self, typ: str) -> List[str]:
+        return self._get_attributes_with_buffer_sizes(typ)
+
+    def _get_attributes_with_buffer_sizes(
+        self,
+        typ: str,
+        max_attribute_values: int = 16,
+        max_attribute_value_len: int = 128,
+    ) -> List[str]:
+        len_values = c_size_t(max_attribute_values)
+        buf_values = (POINTER(c_char) * max_attribute_values)()
+        for i in range(max_attribute_values):
+            buf_values[i] = (c_char * max_attribute_value_len)()
+
+        rc = _DLL.botan_x509_alt_name_get_attribute(
+            self.__obj,
+            _ctype_str(typ),
+            byref(len_values),
+            buf_values,
+            max_attribute_value_len,
+        )
+
+        if rc == -10:
+            return self._get_attributes_with_buffer_sizes(
+                typ=typ,
+                max_attribute_values=max_attribute_values * 2,
+                max_attribute_value_len=max_attribute_value_len * 2,
+            )
+
+        res = []
+        for i in range(len_values.value):
+            value: bytes = cast(buf_values[i], c_char_p).value
+            res.append(_ctype_to_str(value))
+
+        return res
+
+class X509SubjectAlternativeName(X509CertExtension):
+    def __init__(self, obj: c_void_p) -> None:
+        self.__obj = obj
+
+    def __del__(self):
+        _DLL.botan_x509_ext_subject_alt_name_destroy(self.__obj)
+
+    def handle_(self) -> c_void_p:
+        return self.__obj
+
+    @staticmethod
+    def create(alt_name: X509AlternativeName) -> "X509SubjectAlternativeName":
+        obj = c_void_p(0)
+        _DLL.botan_x509_ext_subject_alt_name_init(byref(obj), alt_name.handle_())
+        return X509SubjectAlternativeName(obj)
+
+    @staticmethod
+    def _get_in(extensions: X509CertExtensions) -> Optional["X509SubjectAlternativeName"]:
+        obj = c_void_p(0)
+        _DLL.botan_x509_ext_subject_alt_name_get(byref(obj), extensions.handle_())
+        return X509SubjectAlternativeName(obj) if obj else None
+
+    @property
+    def alt_name(self) -> X509AlternativeName:
+        obj = c_void_p(0)
+        _DLL.botan_x509_ext_subject_alt_name_name(self.__obj, byref(obj))
+        return X509AlternativeName(obj)
+
+class X509CSR:
+    def __init__(self, obj: c_void_p) -> None:
+        self.__obj = obj
+
+    def __del__(self):
+        _DLL.botan_x509_csr_destroy(self.__obj)
+
+    def handle_(self) -> c_void_p:
+        return self.__obj
+
+    @staticmethod
+    def create(
+        private_key: PrivateKey,
+        subject_dn: X509DN,
+        exts: X509CertExtensions,
+        rng: RandomNumberGenerator,
+        hash_fn: str = "",
+        padding_scheme: str = "",
+        challenge: str = "",
+    ) -> "X509CSR":
+        obj = c_void_p(0)
+        _DLL.botan_x509_csr_init(
+            byref(obj),
+            private_key.handle_(),
+            subject_dn.handle_(),
+            exts.handle_(),
+            _ctype_str(hash_fn),
+            rng.handle_(),
+            _ctype_str(padding_scheme),
+            _ctype_str(challenge),
+        )
+        return X509CSR(obj)
+
+    def to_pem(self) -> str:
+        return _call_fn_viewing_str(
+            lambda vc, vfn: _DLL.botan_x509_csr_view_pem(self.__obj, vc, vfn)
+        )
+
+    def to_der(self) -> bytes:
+        return _call_fn_viewing_vec(
+            lambda vc, vfn: _DLL.botan_x509_csr_view_der(self.__obj, vc, vfn)
+        )
+
+    @staticmethod
+    def from_pem(val: Union[bytes, str]) -> "X509CSR":
+        obj = c_void_p(0)
+        bits = _ctype_bits(val)
+        _DLL.botan_x509_csr_load(byref(obj), bits, len(bits))
+        return X509CSR(obj)
 
 #
 # X.509 Certificate revocation lists
